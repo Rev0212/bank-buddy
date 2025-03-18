@@ -12,7 +12,6 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import DashboardHeader from '../../components/dashboard/DashboardHeader';
 
 const Dashboard = () => {
   const [user, setUser] = useState(null);
@@ -146,9 +145,7 @@ const Dashboard = () => {
   }
 
   return (
-    <>
-      <DashboardHeader user={user} />
-      
+    <Container>
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
         <Grid container spacing={3}>
           {/* Welcome Card */}
@@ -465,7 +462,7 @@ const Dashboard = () => {
           </Grid>
         </Grid>
       </Container>
-    </>
+    </Container>
   );
 };
 
