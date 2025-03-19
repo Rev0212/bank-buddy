@@ -33,17 +33,17 @@ const VideoVerificationStep = ({ loanId, onComplete }) => {
       {
         id: 'q1',
         text: 'Please state your full name and date of birth',
-        videoUrl:'http://localhost:3000//videos/prompts/1.mp4'
+        videoUrl: '/prompts/1.mp4'  // Updated path to match src/prompts/1.mp4
       },
       {
         id: 'q2',
         text: 'What is your current home address?',
-        videoUrl:'http://localhost:3000//videos/prompts/2.mp4'
+        videoUrl: '/prompts/2.mp4'  // Updated path to match src/prompts/2.mp4
       },
       {
         id: 'q3',
         text: 'Can you show your Aadhaar card to the camera?',
-        videoUrl:'http://localhost:3000//videos/prompts/3.mp4'
+        videoUrl: '/prompts/3.mp4'  // Updated path to match src/prompts/3.mp4
       }
     ];
     
@@ -90,6 +90,18 @@ const VideoVerificationStep = ({ loanId, onComplete }) => {
     console.log("Playing video:", currentQuestion.videoUrl);
     
     const video = document.createElement('video');
+    
+    // Listen for successful load
+    video.addEventListener('loadeddata', () => {
+      console.log("✅ Video loaded successfully:", currentQuestion.videoUrl);
+    });
+    
+    // Listen for progress events
+    video.addEventListener('progress', () => {
+      console.log("Video loading progress...");
+    });
+    
+    // Set the video source
     video.src = currentQuestion.videoUrl;
     video.controls = true;
     video.style.width = '100%';
