@@ -51,45 +51,54 @@ const VideoVerification = () => {
       try {
         setLoading(true);
         
-        // 1. Fetch uploaded document data
-        const documentResponse = await axios.get(`/api/document/loan/${loanId}`);
-        const docData = {};
+        // DEMO: Instead of API calls, use mock data
+        console.log('Using mock data for demo');
         
-        documentResponse.data.data.forEach(doc => {
-          docData[doc.documentType.toLowerCase().replace(' ', '_')] = doc.verificationDetails?.aiVerificationDetails?.extractedInformation;
-        });
+        // Mock document data
+        const docData = {
+          'aadhaar_card': {
+            name: 'John Doe',
+            number: '1234 5678 9012',
+            address: '123 Main St, Bangalore, Karnataka',
+            dob: '1990-01-01'
+          },
+          'pan_card': {
+            name: 'John Doe',
+            number: 'ABCDE1234F'
+          }
+        };
         
         setDocumentData(docData);
         
-        // 2. Initialize or resume video session
-        let session;
-        try {
-          // Try to get existing session
-          const sessionResponse = await axios.get(`/api/video-interaction/loan/${loanId}`);
-          session = sessionResponse.data.data;
-          setSessionId(session._id);
-          
-          // Check if session is completed
-          if (session.status === 'completed') {
-            setOverallStatus('completed');
-            setVerificationProgress(100);
-          } else {
-            setOverallStatus('in-progress');
-            
-            // Find first unanswered question
-            const nextIndex = session.questions.findIndex(q => !q.isAnswered);
-            setCurrentQuestionIndex(nextIndex >= 0 ? nextIndex : 0);
-            setVerificationProgress((nextIndex / session.questions.length) * 100);
-          }
-        } catch (err) {
-          // Create new session
-          const newSessionResponse = await axios.post('/api/video-interaction', { loanId });
-          session = newSessionResponse.data.data;
-          setSessionId(session._id);
-          setOverallStatus('in-progress');
-        }
+        // Mock video session
+        const mockSession = {
+          _id: 'demo-session-' + Date.now(),
+          status: 'in-progress',
+          questions: [
+            {
+              questionId: 'q1',
+              questionText: 'Please state your full name and date of birth',
+              videoPromptUrl: 'https://assets.mixkit.co/videos/preview/mixkit-woman-talking-through-a-video-call-598-large.mp4',
+              isAnswered: false
+            },
+            {
+              questionId: 'q2',
+              questionText: 'What is your current home address?',
+              videoPromptUrl: 'https://assets.mixkit.co/videos/preview/mixkit-man-talking-through-a-video-call-575-large.mp4',
+              isAnswered: false
+            },
+            {
+              questionId: 'q3',
+              questionText: 'Can you show your Aadhaar card to the camera?',
+              videoPromptUrl: 'https://assets.mixkit.co/videos/preview/mixkit-woman-having-a-video-call-600-large.mp4',
+              isAnswered: false
+            }
+          ]
+        };
         
-        setQuestions(session.questions);
+        setSessionId(mockSession._id);
+        setOverallStatus('in-progress');
+        setQuestions(mockSession.questions);
         
       } catch (err) {
         console.error("Error initializing video verification:", err);
@@ -124,7 +133,18 @@ const VideoVerification = () => {
   // Play the current question video
   const playQuestionVideo = () => {
     if (aiVideoRef.current) {
-      aiVideoRef.current.play();
+      // Default to a fallback video if URL is missing or invalid
+      if (!currentQuestion.videoPromptUrl) {
+        console.log('No video URL found, using fallback');
+        aiVideoRef.current.src = 'https://assets.mixkit.co/videos/preview/mixkit-woman-talking-through-a-video-call-598-large.mp4';
+      }
+      
+      aiVideoRef.current.play().catch(err => {
+        console.error('Error playing video:', err);
+        // Auto-advance if video can't play
+        handleQuestionVideoEnded();
+      });
+      
       setIsPlayingQuestion(true);
     }
   };
@@ -209,34 +229,49 @@ const VideoVerification = () => {
     setRecordingStatus('processing');
     
     try {
-      // Create a blob from the recorded chunks
-      const blob = new Blob(recordedChunks, {
-        type: 'video/webm'
-      });
+      // DEMO: Simulate processing delay
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
-      // Create FormData and append the video blob
-      const formData = new FormData();
-      formData.append('video', blob, 'response.webm');
-      formData.append('questionId', questions[currentQuestionIndex].questionId);
+      // DEMO: Mock response based on current question
+      const questionType = currentQuestionIndex;
+      let mockResponse;
       
-      // Upload the video response
-      const response = await axios.post(`/api/video-interaction/${sessionId}/answer`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
-      
-      // Get the transcribed text from the response
-      const transcribedText = response.data.data.transcribedText;
+      if (questionType === 0) {
+        // Name question
+        mockResponse = {
+          transcribedText: "My name is John Doe and I was born on January 1st, 1990",
+          verified: true,
+          confidence: 0.89,
+          matchedDocument: "aadhaar_card"
+        };
+      }
+      else if (questionType === 1) {
+        // Address question
+        mockResponse = {
+          transcribedText: "I live at 123 Main St in Bangalore, Karnataka",
+          verified: true,
+          confidence: 0.92,
+          matchedDocument: "aadhaar_card"
+        };
+      }
+      else {
+        // Document showing question
+        mockResponse = {
+          transcribedText: "Here is my Aadhaar card with number 1234 5678 9012",
+          verified: true,
+          confidence: 0.95,
+          matchedDocument: "aadhaar_card"
+        };
+      }
       
       // Update verification results
       setVerificationResults(prev => ({
         ...prev,
         [questions[currentQuestionIndex].questionId]: {
-          text: transcribedText,
-          verified: response.data.data.verified,
-          confidence: response.data.data.confidence,
-          matchedDocument: response.data.data.matchedDocument
+          text: mockResponse.transcribedText,
+          verified: mockResponse.verified,
+          confidence: mockResponse.confidence,
+          matchedDocument: mockResponse.matchedDocument
         }
       }));
       
@@ -253,7 +288,6 @@ const VideoVerification = () => {
         setVerificationProgress(((currentQuestionIndex + 1) / questions.length) * 100);
       } else {
         // Complete the verification process
-        await axios.post(`/api/video-interaction/${sessionId}/complete`);
         setOverallStatus('completed');
         setVerificationProgress(100);
       }
