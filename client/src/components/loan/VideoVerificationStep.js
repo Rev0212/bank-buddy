@@ -13,148 +13,161 @@ const VideoVerificationStep = ({ loanId, onComplete }) => {
   const webcamRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const videoRef = useRef(null);
-  const aiVideoRef = useRef(null);
+  const streamRef = useRef(null);
   
   // States
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [questions, setQuestions] = useState([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [sessionId, setSessionId] = useState(null);
-  const [isRecording, setIsRecording] = useState(false);
   const [recordedChunks, setRecordedChunks] = useState([]);
-  const [recordingStatus, setRecordingStatus] = useState('idle'); // idle, countdown, recording, processing, completed
-  const [countdown, setCountdown] = useState(3);
-  const [isPlayingQuestion, setIsPlayingQuestion] = useState(false);
-  const [verificationProgress, setVerificationProgress] = useState(0);
+  const [step, setStep] = useState('intro'); // intro, playing-video, recording, review, processing
   const [recordingTime, setRecordingTime] = useState(0);
   const [maxRecordingTime] = useState(30); // 30 seconds max
-  const [recordingTimer, setRecordingTimer] = useState(null);
-  const [verificationResults, setVerificationResults] = useState({});
-  const [overallStatus, setOverallStatus] = useState('pending'); // pending, in-progress, completed, failed
+  const [progress, setProgress] = useState(0);
+  const [completed, setCompleted] = useState(false);
   
-  // Load session data
+  // Initialize with sample questions
   useEffect(() => {
-    const initializeVerification = async () => {
-      try {
-        setLoading(true);
-        
-        // Mock data for demo
-        const mockSession = {
-          _id: 'demo-session-' + Date.now(),
-          status: 'in-progress',
-          questions: [
-            {
-              questionId: 'q1',
-              questionText: 'Please state your full name and date of birth',
-              videoPromptUrl: 'https://assets.mixkit.co/videos/preview/mixkit-woman-talking-through-a-video-call-598-large.mp4',
-              isAnswered: false
-            },
-            {
-              questionId: 'q2',
-              questionText: 'What is your current home address?',
-              videoPromptUrl: 'https://assets.mixkit.co/videos/preview/mixkit-man-talking-through-a-video-call-575-large.mp4',
-              isAnswered: false
-            },
-            {
-              questionId: 'q3',
-              questionText: 'Can you show your Aadhaar card to the camera?',
-              videoPromptUrl: 'https://assets.mixkit.co/videos/preview/mixkit-woman-having-a-video-call-600-large.mp4',
-              isAnswered: false
-            }
-          ]
-        };
-        
-        setSessionId(mockSession._id);
-        setOverallStatus('in-progress');
-        setQuestions(mockSession.questions);
-      } catch (err) {
-        console.error("Error initializing video verification:", err);
-        setError("Failed to initialize video verification. Please try again later.");
-      } finally {
-        setLoading(false);
+    const mockQuestions = [
+      {
+        id: 'q1',
+        text: 'Please state your full name and date of birth',
+        videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-woman-talking-through-a-video-call-598-large.mp4'
+      },
+      {
+        id: 'q2',
+        text: 'What is your current home address?',
+        videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-man-talking-through-a-video-call-575-large.mp4'
+      },
+      {
+        id: 'q3',
+        text: 'Can you show your Aadhaar card to the camera?',
+        videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-young-woman-talking-on-a-video-call-with-smartphone-42982-large.mp4'
       }
-    };
+    ];
     
-    initializeVerification();
+    setQuestions(mockQuestions);
+    setLoading(false);
   }, [loanId]);
+  
+  // Current question helper
+  const currentQuestion = questions[currentQuestionIndex] || {
+    id: 'default',
+    text: 'Default question',
+    videoUrl: ''
+  };
   
   // Clean up on unmount
   useEffect(() => {
     return () => {
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-        mediaRecorderRef.current.stop();
-      }
-      
-      if (recordingTimer) {
-        clearInterval(recordingTimer);
-      }
+      stopMediaTracks();
     };
-  }, [recordingTimer]);
+  }, []);
   
-  // Handle AI video ended event
-  const handleQuestionVideoEnded = () => {
-    setIsPlayingQuestion(false);
-    startRecordingCountdown();
-  };
-  
-  // Play the current question video
-  const playQuestionVideo = () => {
-    if (aiVideoRef.current) {
-      // Default to a fallback video if URL is missing or invalid
-      if (!questions[currentQuestionIndex]?.videoPromptUrl) {
-        console.log('No video URL found, using fallback');
-        aiVideoRef.current.src = 'https://assets.mixkit.co/videos/preview/mixkit-woman-talking-through-a-video-call-598-large.mp4';
-      }
-      
-      aiVideoRef.current.play().catch(err => {
-        console.error('Error playing video:', err);
-        // Auto-advance if video can't play
-        handleQuestionVideoEnded();
-      });
-      
-      setIsPlayingQuestion(true);
+  // Stop all media tracks to release camera
+  const stopMediaTracks = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+    }
+    
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
     }
   };
   
-  // Start countdown before recording
-  const startRecordingCountdown = () => {
-    setRecordingStatus('countdown');
-    setCountdown(3);
-    
-    const countdownInterval = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) {
-          clearInterval(countdownInterval);
-          startRecording();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+  // Format time helper (MM:SS)
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
   
-  // Initialize and start recording
+  // Step 1: Play question video
+  const playQuestionVideo = () => {
+    setStep('playing-video');
+    
+    const video = document.createElement('video');
+    video.src = currentQuestion.videoUrl;
+    video.controls = true;
+    video.style.width = '100%';
+    video.style.height = '100%';
+    
+    const container = document.getElementById('video-container');
+    if (container) {
+      container.innerHTML = '';
+      container.appendChild(video);
+      
+      // Auto play with fallback
+      const playPromise = video.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(error => {
+          console.error('Error auto-playing video:', error);
+          video.controls = true; // Show controls if autoplay fails
+        });
+      }
+      
+      // When video ends, start recording
+      video.onended = () => {
+        startRecording();
+      };
+    }
+  };
+  
+  // Step 2: Start recording after video ends
   const startRecording = () => {
-    if (webcamRef.current && webcamRef.current.stream) {
-      setRecordingStatus('recording');
-      setIsRecording(true);
-      setRecordedChunks([]);
-      setRecordingTime(0);
+    setStep('recording');
+    setRecordingTime(0);
+    setRecordedChunks([]);
+    setError('');
+    
+    navigator.mediaDevices.getUserMedia({
+      audio: true,
+      video: {
+        width: 1280,
+        height: 720,
+        facingMode: "user"
+      }
+    })
+    .then(stream => {
+      streamRef.current = stream;
       
-      const stream = webcamRef.current.stream;
-      mediaRecorderRef.current = new MediaRecorder(stream, {
-        mimeType: 'video/webm'
-      });
+      if (webcamRef.current) {
+        webcamRef.current.video.srcObject = stream;
+      }
       
-      mediaRecorderRef.current.addEventListener('dataavailable', handleDataAvailable);
-      mediaRecorderRef.current.addEventListener('stop', handleRecordingStopped);
-      mediaRecorderRef.current.start();
+      // Create MediaRecorder
+      let options;
+      if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
+        options = {mimeType: 'video/webm;codecs=vp9,opus'};
+      } else if (MediaRecorder.isTypeSupported('video/webm')) {
+        options = {mimeType: 'video/webm'};
+      } else {
+        options = {};
+      }
+      
+      const recorder = new MediaRecorder(stream, options);
+      mediaRecorderRef.current = recorder;
+      
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          console.log("Data available:", event.data.size, "bytes");
+          setRecordedChunks(prev => [...prev, event.data]);
+        }
+      };
+      
+      recorder.onstop = () => {
+        console.log("MediaRecorder stopped");
+        setStep('review');
+      };
+      
+      recorder.start(1000); // Capture in 1 second chunks
       
       // Set up timer
       const timer = setInterval(() => {
         setRecordingTime(prev => {
           if (prev >= maxRecordingTime) {
+            clearInterval(timer);
             stopRecording();
             return maxRecordingTime;
           }
@@ -162,85 +175,109 @@ const VideoVerificationStep = ({ loanId, onComplete }) => {
         });
       }, 1000);
       
-      setRecordingTimer(timer);
-    } else {
-      setError("Cannot access camera or microphone. Please check permissions.");
-    }
+      // Auto stop after max time
+      setTimeout(() => {
+        if (recorder.state === 'recording') {
+          stopRecording();
+        }
+      }, maxRecordingTime * 1000);
+      
+    })
+    .catch(err => {
+      console.error("Error accessing media devices:", err);
+      setError(`Camera access error: ${err.message || 'Unknown error'}`);
+      setStep('intro');
+    });
   };
   
-  // Handle recorded video data
-  const handleDataAvailable = (event) => {
-    if (event.data && event.data.size > 0) {
-      setRecordedChunks(prev => [...prev, event.data]);
-    }
-  };
-  
-  // Handle recording stopped
-  const handleRecordingStopped = () => {
-    setIsRecording(false);
-    clearInterval(recordingTimer);
-    setRecordingStatus('completed');
-  };
-  
-  // Stop recording 
+  // Step 3: Stop recording
   const stopRecording = () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      mediaRecorderRef.current.stop();
+      console.log("Stopping recording...");
+      
+      // Request final data chunk before stopping
+      mediaRecorderRef.current.requestData();
+      
+      setTimeout(() => {
+        mediaRecorderRef.current.stop();
+      }, 200);
+    } else {
+      console.log("No active recording to stop");
+      setStep('review');
     }
   };
   
-  // Submit recorded answer
-  const submitRecording = async () => {
-    if (!recordedChunks.length) return;
+  // Step 4: Submit recording and move to next question
+  const submitRecording = () => {
+    setStep('processing');
     
-    setRecordingStatus('processing');
-    
-    try {
-      // Demo mock verification
-      await new Promise(resolve => setTimeout(resolve, 2000));
+    // Create blob from chunks
+    if (recordedChunks.length > 0) {
+      const blob = new Blob(recordedChunks, {
+        type: 'video/webm'
+      });
       
-      // Update questions array to mark this one as answered
-      setQuestions(prev => prev.map((q, idx) => 
-        idx === currentQuestionIndex ? { ...q, isAnswered: true } : q
-      ));
+      console.log(`Video recorded: ${(blob.size / (1024 * 1024)).toFixed(2)} MB`);
       
-      // Move to the next question or complete
-      if (currentQuestionIndex < questions.length - 1) {
-        setCurrentQuestionIndex(prev => prev + 1);
-        setRecordingStatus('idle');
-        setRecordedChunks([]);
-        setVerificationProgress(((currentQuestionIndex + 1) / questions.length) * 100);
-      } else {
-        // Complete the verification process
-        setOverallStatus('completed');
-        setVerificationProgress(100);
-        if (onComplete) {
-          onComplete();
+      // In a real app, upload the blob here
+      // For demo, we'll simulate processing
+      setTimeout(() => {
+        // Update progress
+        const newProgress = ((currentQuestionIndex + 1) / questions.length) * 100;
+        setProgress(newProgress);
+        
+        // Check if more questions
+        if (currentQuestionIndex < questions.length - 1) {
+          // Move to next question
+          setCurrentQuestionIndex(prev => prev + 1);
+          setStep('intro');
+        } else {
+          // Completed all questions
+          setCompleted(true);
         }
-      }
-    } catch (err) {
-      console.error("Error submitting video response:", err);
-      setError("Failed to submit your response. Please try again.");
+        
+        // Release camera
+        stopMediaTracks();
+        
+      }, 2000);
+    } else {
+      setError("No recording data available. Please try again.");
+      setStep('intro');
     }
+  };
+  
+  // Skip current question for demo
+  const skipQuestion = () => {
+    setStep('processing');
+    
+    setTimeout(() => {
+      // Update progress
+      const newProgress = ((currentQuestionIndex + 1) / questions.length) * 100;
+      setProgress(newProgress);
+      
+      // Check if more questions
+      if (currentQuestionIndex < questions.length - 1) {
+        // Move to next question
+        setCurrentQuestionIndex(prev => prev + 1);
+        setStep('intro');
+      } else {
+        // Completed all questions
+        setCompleted(true);
+      }
+      
+      // Release camera
+      stopMediaTracks();
+    }, 1000);
   };
   
   // Retry recording
   const retryRecording = () => {
+    setStep('intro');
     setRecordedChunks([]);
-    setRecordingStatus('idle');
-    setRecordingTime(0);
+    stopMediaTracks();
   };
   
-  // Get current question data
-  const currentQuestion = questions[currentQuestionIndex] || {};
-  
-  // Format time for display
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
-    const secs = (seconds % 60).toString().padStart(2, '0');
-    return `${mins}:${secs}`;
-  };
-  
+  // Render loading state
   if (loading) {
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 4 }}>
@@ -252,7 +289,8 @@ const VideoVerificationStep = ({ loanId, onComplete }) => {
     );
   }
   
-  if (overallStatus === 'completed') {
+  // Render completion state
+  if (completed) {
     return (
       <Box sx={{ py: 2 }}>
         <Paper sx={{ p: 3, textAlign: 'center', mb: 3 }}>
@@ -265,10 +303,10 @@ const VideoVerificationStep = ({ loanId, onComplete }) => {
           </Typography>
         </Paper>
         <Button 
-          variant="contained" 
-          color="primary" 
+          variant="contained"
+          color="primary"
           fullWidth 
-          onClick={onComplete}
+          onClick={() => onComplete && onComplete(true)}
         >
           Continue
         </Button>
@@ -289,7 +327,7 @@ const VideoVerificationStep = ({ loanId, onComplete }) => {
         <Box sx={{ mb: 3 }}>
           <LinearProgress 
             variant="determinate" 
-            value={verificationProgress} 
+            value={progress} 
             sx={{ height: 8, borderRadius: 5 }}
           />
           <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
@@ -297,7 +335,7 @@ const VideoVerificationStep = ({ loanId, onComplete }) => {
               Question {currentQuestionIndex + 1} of {questions.length}
             </Typography>
             <Typography variant="body2">
-              {Math.round(verificationProgress)}% Complete
+              {Math.round(progress)}% Complete
             </Typography>
           </Box>
         </Box>
@@ -305,10 +343,11 @@ const VideoVerificationStep = ({ loanId, onComplete }) => {
       
       <Paper sx={{ p: 3, mb: 3 }}>
         <Box sx={{ mb: 3 }}>
-          {recordingStatus === 'idle' && (
+          {/* STEP 1: Question intro */}
+          {step === 'intro' && (
             <>
               <Typography variant="h6" gutterBottom>
-                Question: {currentQuestion.questionText}
+                Question: {currentQuestion.text}
               </Typography>
               <Button
                 variant="contained"
@@ -323,44 +362,41 @@ const VideoVerificationStep = ({ loanId, onComplete }) => {
             </>
           )}
           
-          {isPlayingQuestion && (
-            <Box sx={{ position: 'relative', width: '100%', pt: '56.25%' }}>
-              <video
-                ref={aiVideoRef}
-                src={currentQuestion.videoPromptUrl}
-                style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
-                controls={false}
-                onEnded={handleQuestionVideoEnded}
-              />
-            </Box>
-          )}
-          
-          {recordingStatus === 'countdown' && (
-            <Box 
-              sx={{ 
-                display: 'flex', 
-                flexDirection: 'column', 
-                alignItems: 'center', 
-                justifyContent: 'center', 
-                p: 4 
-              }}
-            >
-              <Typography variant="h2" color="primary">
-                {countdown}
-              </Typography>
-              <Typography variant="h6">
-                Recording will start in...
-              </Typography>
-            </Box>
-          )}
-          
-          {recordingStatus === 'recording' && (
+          {/* STEP 2: Playing AI video */}
+          {step === 'playing-video' && (
             <>
-              <Box sx={{ position: 'relative', width: '100%', pt: '56.25%', mb: 2 }}>
+              <Box id="video-container" sx={{ width: '100%', aspectRatio: '16/9', mb: 2 }}>
+                {/* Video element gets inserted here by JS */}
+              </Box>
+              
+              <Button
+                variant="contained"
+                color="primary"
+                sx={{ mt: 2 }}
+                onClick={startRecording}
+              >
+                Skip Video & Start Recording
+              </Button>
+            </>
+          )}
+          
+          {/* STEP 3: Recording user response */}
+          {step === 'recording' && (
+            <>
+              <Box sx={{ position: 'relative', width: '100%', aspectRatio: '16/9', mb: 2 }}>
                 <Webcam
                   audio={true}
                   ref={webcamRef}
-                  style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
+                  style={{ 
+                    width: '100%', 
+                    height: '100%'
+                  }}
+                  videoConstraints={{
+                    width: 1280,
+                    height: 720,
+                    facingMode: "user"
+                  }}
+                  mirrored={true}
                 />
                 <Box 
                   sx={{ 
@@ -395,20 +431,38 @@ const VideoVerificationStep = ({ loanId, onComplete }) => {
             </>
           )}
           
-          {recordingStatus === 'completed' && (
+          {/* STEP 4: Review recording */}
+          {step === 'review' && (
             <>
               <Typography variant="h6" gutterBottom>
                 Review Your Response
               </Typography>
               
-              <Box sx={{ position: 'relative', width: '100%', pt: '56.25%', mb: 2 }}>
-                <video
-                  ref={videoRef}
-                  src={recordedChunks.length ? URL.createObjectURL(new Blob(recordedChunks, { type: 'video/webm' })) : ''}
-                  style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
-                  controls
-                />
-              </Box>
+              {recordedChunks.length > 0 ? (
+                <Box sx={{ width: '100%', aspectRatio: '16/9', mb: 2 }}>
+                  <video
+                    ref={videoRef}
+                    src={URL.createObjectURL(new Blob(recordedChunks, { type: 'video/webm' }))}
+                    style={{ width: '100%', height: '100%' }}
+                    controls
+                    autoPlay
+                  />
+                </Box>
+              ) : (
+                <Box sx={{ 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  height: '200px',
+                  backgroundColor: '#f5f5f5', 
+                  mb: 2 
+                }}>
+                  <Typography variant="body1" color="text.secondary">
+                    No recording captured. Please try again.
+                  </Typography>
+                </Box>
+              )}
               
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
                 <Button
@@ -423,6 +477,7 @@ const VideoVerificationStep = ({ loanId, onComplete }) => {
                   color="success"
                   startIcon={<CheckCircle />}
                   onClick={submitRecording}
+                  disabled={recordedChunks.length === 0}
                 >
                   Submit Response
                 </Button>
@@ -430,7 +485,8 @@ const VideoVerificationStep = ({ loanId, onComplete }) => {
             </>
           )}
           
-          {recordingStatus === 'processing' && (
+          {/* STEP 5: Processing */}
+          {step === 'processing' && (
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', p: 4 }}>
               <CircularProgress />
               <Typography variant="h6" sx={{ mt: 2 }}>
@@ -439,9 +495,19 @@ const VideoVerificationStep = ({ loanId, onComplete }) => {
             </Box>
           )}
         </Box>
-        
+            
         {error && (
-          <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>
+          <Alert 
+            severity="error" 
+            sx={{ mt: 2 }}
+            action={
+              <Button color="error" size="small" onClick={skipQuestion}>
+                Skip Question
+              </Button>
+            }
+          >
+            {error}
+          </Alert>
         )}
       </Paper>
     </Box>

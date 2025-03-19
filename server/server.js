@@ -3,6 +3,7 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const connectDB = require('./config/db');
 const path = require('path');
+
 const errorHandler = require('./middleware/error');
 
 // Load environment variables
@@ -18,7 +19,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
+app.use(express.static('public'));
 // Define routes
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', message: 'Server is running' });

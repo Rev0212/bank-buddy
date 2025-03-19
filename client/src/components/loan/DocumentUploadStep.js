@@ -18,6 +18,7 @@ const DocumentUploadStep = ({ loanId, onComplete }) => {
     bank_statement: { file: null, status: 'pending', data: null },
     photo_id: { file: null, status: 'pending', data: null }
   });
+  const [isConfirmed, setIsConfirmed] = useState(false);
   
   const documentTypes = [
     { id: 'aadhaar_card', label: 'Aadhaar Card', required: true },
@@ -33,7 +34,6 @@ const DocumentUploadStep = ({ loanId, onComplete }) => {
       documents[docType].status === 'uploaded' || documents[docType].status === 'verified'
     );
     
-    onComplete(allRequiredUploaded);
     return allRequiredUploaded;
   };
   
@@ -76,26 +76,26 @@ const DocumentUploadStep = ({ loanId, onComplete }) => {
       // Simulate successful upload with mock data
       const mockData = {
         aadhaar_card: {
-          name: 'John Doe',
-          number: '1234 5678 9012',
-          address: '123 Main St, Bangalore, Karnataka',
-          dob: '1990-01-01'
+          name: 'Rishi Anand',
+          number: '3318-7769-4555',
+          address: 'Sourastra Street , Nungapakam , Chennai',
+          dob: '07/10/2004'
         },
         pan_card: {
-          name: 'John Doe',
-          number: 'ABCDE1234F'
+          name: 'Rishi Anand',
+          number: 'GAUPR7898H'
         },
         bank_statement: {
-          accountNumber: '1234567890',
+          accountNumber: '8953018041',
           bankName: 'HDFC Bank',
           period: 'Jan 2025 - Mar 2025',
           averageBalance: '85000'
         },
         photo_id: {
-          name: 'John Doe',
-          idType: 'Voter ID',
-          idNumber: 'ABC1234567',
-          issueDate: '01-01-2020'
+          name: 'Rishi Anand',
+          idType: 'Driving Liscense',
+          idNumber: 'TN-22-20220000000',
+          issueDate: '03-07-2022'
         }
       };
       
@@ -144,6 +144,14 @@ const DocumentUploadStep = ({ loanId, onComplete }) => {
     
     // Re-check completion
     checkCompletion();
+  };
+  
+  const handleConfirm = () => {
+    const isComplete = checkCompletion();
+    if (isComplete) {
+      setIsConfirmed(true);
+      onComplete(true);
+    }
   };
   
   useEffect(() => {
@@ -259,16 +267,31 @@ const DocumentUploadStep = ({ loanId, onComplete }) => {
         ))}
       </List>
       
-      {/* Completion Status */}
-      {checkCompletion() ? (
-        <Alert severity="success" sx={{ mt: 3 }}>
-          All required documents uploaded! You can proceed to the next step.
-        </Alert>
-      ) : (
-        <Alert severity="info" sx={{ mt: 3 }}>
-          Please upload all required documents to continue.
-        </Alert>
-      )}
+      <Box sx={{ mt: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Box>
+          {checkCompletion() ? (
+            <Alert severity="success" sx={{ mb: 2 }}>
+              All required documents uploaded successfully
+            </Alert>
+          ) : (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Please upload all required documents before proceeding
+            </Alert>
+          )}
+        </Box>
+        
+        <Button
+          variant="contained"
+          color="primary"
+          size="large"
+          disabled={!checkCompletion() || isConfirmed}
+          onClick={handleConfirm}
+          startIcon={<CheckCircle />}
+          sx={{ px: 4 }}
+        >
+          {isConfirmed ? 'Confirmed' : 'Confirm Documents & Continue'}
+        </Button>
+      </Box>
     </Box>
   );
 };

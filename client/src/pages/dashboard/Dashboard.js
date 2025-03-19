@@ -338,7 +338,7 @@ const Dashboard = () => {
               Quick Access
             </Typography>
             <Grid container spacing={2}>
-              <Grid item xs={6} sm={3}>
+              {/* <Grid item xs={6} sm={3}>
                 <Card elevation={2} sx={{ textAlign: 'center', height: '100%' }}>
                   <CardContent>
                     <VideoCall fontSize="large" color="primary" />
@@ -376,7 +376,7 @@ const Dashboard = () => {
                     </Button>
                   </CardActions>
                 </Card>
-              </Grid>
+              </Grid> */}
               
               <Grid item xs={6} sm={3}>
                 <Card elevation={2} sx={{ textAlign: 'center', height: '100%' }}>
