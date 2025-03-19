@@ -33,17 +33,17 @@ const VideoVerificationStep = ({ loanId, onComplete }) => {
       {
         id: 'q1',
         text: 'Please state your full name and date of birth',
-        videoUrl: '/prompts/1.mp4'  // Updated path to match src/prompts/1.mp4
+        videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-woman-talking-through-a-video-call-598-large.mp4'
       },
       {
         id: 'q2',
         text: 'What is your current home address?',
-        videoUrl: '/prompts/2.mp4'  // Updated path to match src/prompts/2.mp4
+        videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-man-talking-through-a-video-call-575-large.mp4'
       },
       {
         id: 'q3',
         text: 'Can you show your Aadhaar card to the camera?',
-        videoUrl: '/prompts/3.mp4'  // Updated path to match src/prompts/3.mp4
+        videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-young-woman-talking-on-a-video-call-with-smartphone-42982-large.mp4'
       }
     ];
     
@@ -87,52 +87,11 @@ const VideoVerificationStep = ({ loanId, onComplete }) => {
   const playQuestionVideo = () => {
     setStep('playing-video');
     
-    console.log("Playing video:", currentQuestion.videoUrl);
-    
     const video = document.createElement('video');
-    
-    // Listen for successful load
-    video.addEventListener('loadeddata', () => {
-      console.log("✅ Video loaded successfully:", currentQuestion.videoUrl);
-    });
-    
-    // Listen for progress events
-    video.addEventListener('progress', () => {
-      console.log("Video loading progress...");
-    });
-    
-    // Set the video source
     video.src = currentQuestion.videoUrl;
     video.controls = true;
     video.style.width = '100%';
     video.style.height = '100%';
-    
-    // Add error handling
-    video.onerror = (e) => {
-      console.error("Video error:", e);
-      console.error("Error code:", video.error ? video.error.code : "unknown");
-      console.error("Error message:", video.error ? video.error.message : "unknown");
-      setError(`Failed to load video: ${video.error ? video.error.message : "File not found or format not supported"}`);
-      
-      // Fallback to online videos if local videos fail
-      console.log("Falling back to online videos");
-      let fallbackUrl;
-      switch(currentQuestionIndex) {
-        case 0:
-          fallbackUrl = 'https://assets.mixkit.co/videos/preview/mixkit-woman-talking-through-a-video-call-598-large.mp4';
-          break;
-        case 1:
-          fallbackUrl = 'https://assets.mixkit.co/videos/preview/mixkit-man-talking-through-a-video-call-575-large.mp4';
-          break;
-        case 2:
-          fallbackUrl = 'https://assets.mixkit.co/videos/preview/mixkit-young-woman-talking-on-a-video-call-with-smartphone-42982-large.mp4';
-          break;
-        default:
-          fallbackUrl = 'https://assets.mixkit.co/videos/preview/mixkit-woman-having-a-video-call-600-large.mp4';
-      }
-      video.src = fallbackUrl;
-      console.log("Using fallback video:", fallbackUrl);
-    };
     
     const container = document.getElementById('video-container');
     if (container) {

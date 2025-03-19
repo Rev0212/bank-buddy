@@ -1,145 +1,147 @@
-import React, { useState, useEffect } from 'react';
-import { useSelector, useDispatch } from 'react-redux';
-import {
-  Container,
-  Paper,
-  Typography,
-  TextField,
-  Button,
-  Grid,
-  Box,
+import React from 'react';
+import { 
+  Box, 
+  Container, 
+  Paper, 
+  Typography, 
+  Grid, 
+  Divider, 
   Avatar,
-  CircularProgress,
-  Alert
+  Card,
+  CardContent
 } from '@mui/material';
+import { AccountCircle, AccountBalance } from '@mui/icons-material';
+import { useSelector } from 'react-redux';
 
 const Profile = () => {
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    address: '',
-    profileImage: ''
-  });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(false);
-
   const { user } = useSelector((state) => state.auth);
-  const dispatch = useDispatch();
-
-  useEffect(() => {
-    if (user) {
-      setFormData((prev) => ({
-        ...prev,
-        name: user.name || '',
-        email: user.email || '',
-        phone: user.phone || '',
-        address: user.address || '',
-        profileImage: user.profileImage || ''
-      }));
-    }
-  }, [user]);
-
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-    try {
-      // TODO: Implement profile update API call
-      setSuccess(true);
-    } catch (err) {
-      setError(err.message || 'Failed to update profile');
-    }
-    setLoading(false);
+  
+  // Hardcoded profile data
+  const profileData = {
+    name: user?.name || 'Rishi Anand',
+    email: user?.email || 'rishianand0212@gmail.com',
+    mobile: '+91 8778850830',
+    gender: 'Male',
+    bankName: 'City Union Bank',
+    ifscCode: 'CUB0000023',
+    branchLocation: 'Nungapakam,Chennai, Tamil Nadu'
   };
 
   return (
-    <Container maxWidth="md">
-      <Paper elevation={3} sx={{ p: 4, mt: 4 }}>
-        <Box sx={{ mb: 4, textAlign: 'center' }}>
-          <Avatar
-            src={formData.profileImage}
-            sx={{ width: 120, height: 120, mx: 'auto', mb: 2 }}
-          />
-          <Typography variant="h4" component="h1" gutterBottom>
-            Profile Settings
+    <Container maxWidth="md" sx={{ py: 4 }}>
+      <Paper elevation={3} sx={{ borderRadius: 2, overflow: 'hidden' }}>
+        {/* Profile Header */}
+        <Box sx={{ 
+          bgcolor: 'primary.main', 
+          color: 'white', 
+          p: 3,
+          display: 'flex',
+          alignItems: 'center'
+        }}>
+          <Avatar 
+            sx={{ width: 80, height: 80, bgcolor: 'white', color: 'primary.main', mr: 3 }}
+          >
+            <AccountCircle sx={{ width: 60, height: 60 }} />
+          </Avatar>
+          <Typography variant="h4" component="h1">
+            Profile Information
           </Typography>
         </Box>
 
-        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-        {success && (
-          <Alert severity="success" sx={{ mb: 2 }}>
-            Profile updated successfully!
-          </Alert>
-        )}
+        <Box sx={{ p: 3 }}>
+          {/* Personal Information */}
+          <Card sx={{ mb: 3 }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <AccountCircle sx={{ mr: 1 }} color="primary" />
+                <Typography variant="h6" component="h2">
+                  Personal Information
+                </Typography>
+              </Box>
+              <Divider sx={{ mb: 2 }} />
 
-        <form onSubmit={handleSubmit}>
-          <Grid container spacing={3}>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                label="Name"
-                name="name"
-                value={formData.name}
-                onChange={handleChange}
-                required
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                label="Email"
-                name="email"
-                type="email"
-                value={formData.email}
-                onChange={handleChange}
-                required
-                disabled
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                label="Phone"
-                name="phone"
-                value={formData.phone}
-                onChange={handleChange}
-                required
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Address"
-                name="address"
-                value={formData.address}
-                onChange={handleChange}
-                multiline
-                rows={3}
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <Button
-                type="submit"
-                variant="contained"
-                color="primary"
-                size="large"
-                disabled={loading}
-                sx={{ mt: 2 }}
-              >
-                {loading ? <CircularProgress size={24} /> : 'Update Profile'}
-              </Button>
-            </Grid>
-          </Grid>
-        </form>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="body2" color="text.secondary">
+                    Full Name
+                  </Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 'medium', mb: 2 }}>
+                    {profileData.name}
+                  </Typography>
+                </Grid>
+
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="body2" color="text.secondary">
+                    Email Address
+                  </Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 'medium', mb: 2 }}>
+                    {profileData.email}
+                  </Typography>
+                </Grid>
+
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="body2" color="text.secondary">
+                    Mobile Number
+                  </Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 'medium', mb: 2 }}>
+                    {profileData.mobile}
+                  </Typography>
+                </Grid>
+
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="body2" color="text.secondary">
+                    Gender
+                  </Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 'medium', mb: 2 }}>
+                    {profileData.gender}
+                  </Typography>
+                </Grid>
+              </Grid>
+            </CardContent>
+          </Card>
+
+          {/* Bank Information */}
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <AccountBalance sx={{ mr: 1 }} color="primary" />
+                <Typography variant="h6" component="h2">
+                  Bank Details
+                </Typography>
+              </Box>
+              <Divider sx={{ mb: 2 }} />
+
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="body2" color="text.secondary">
+                    Bank Name
+                  </Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 'medium', mb: 2 }}>
+                    {profileData.bankName}
+                  </Typography>
+                </Grid>
+
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="body2" color="text.secondary">
+                    IFSC Code
+                  </Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 'medium', mb: 2 }}>
+                    {profileData.ifscCode}
+                  </Typography>
+                </Grid>
+
+                <Grid item xs={12}>
+                  <Typography variant="body2" color="text.secondary">
+                    Branch Location
+                  </Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
+                    {profileData.branchLocation}
+                  </Typography>
+                </Grid>
+              </Grid>
+            </CardContent>
+          </Card>
+        </Box>
       </Paper>
     </Container>
   );
