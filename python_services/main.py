@@ -83,9 +83,9 @@ async def verify_document(document: UploadFile = File(...), doc_type: str = Form
     if doc_type == "aadhaar_card":
         # Simulate Aadhaar card OCR
         extracted_data = {
-            "name": "John Doe",
-            "aadhaar_number": "XXXX-XXXX-1234",
-            "dob": "01-01-1990",
+            "name": "Rishi Anand",
+            "aadhaar_number": "3318-7769-4555",
+            "dob": "07-10-2004",
             "address": "123 Main St, Bangalore, Karnataka",
             "gender": "Male"
         }
@@ -93,16 +93,16 @@ async def verify_document(document: UploadFile = File(...), doc_type: str = Form
     elif doc_type == "pan_card":
         # Simulate PAN card OCR
         extracted_data = {
-            "name": "John Doe",
+            "name": "Rishi Anand",
             "pan_number": "ABCDE1234F",
-            "dob": "01-01-1990",
-            "father_name": "James Doe"
+            "dob": "07-10-2004",
+            "father_name": "Anand"
         }
     
     elif doc_type == "bank_statement":
         # Simulate bank statement OCR
         extracted_data = {
-            "account_holder": "John Doe",
+            "account_holder": "Rishi Anand",
             "account_number": "XXXXXXXX5678",
             "bank_name": "HDFC Bank",
             "branch": "Koramangala Branch",
@@ -113,7 +113,7 @@ async def verify_document(document: UploadFile = File(...), doc_type: str = Form
     elif doc_type == "photo_id":
         # Simulate generic photo ID OCR
         extracted_data = {
-            "name": "John Doe",
+            "name": "Rishi Anand",
             "id_type": "Voter ID",
             "id_number": "ABC1234567",
             "issue_date": "01-01-2020",
@@ -168,7 +168,7 @@ async def analyze_video_response(video_file: UploadFile = File(...), document_da
         transcribed_text = "My name is John Doe and I was born on January 1st, 1990"
         if "aadhaar_card" in doc_data and "name" in doc_data["aadhaar_card"]:
             # Check if name matches
-            if "John Doe".lower() in doc_data["aadhaar_card"]["name"].lower():
+            if "Rishi Anand".lower() in doc_data["aadhaar_card"]["name"].lower():
                 verified = True
                 confidence = 0.92
                 matched_document = "aadhaar_card"
