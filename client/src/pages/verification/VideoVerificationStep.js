@@ -1,52 +1,96 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Container, Box, Typography, Paper, Button, Stepper, 
-  Step, StepLabel, CircularProgress, LinearProgress, 
-  Alert, Grid
+  Container, Box, Typography, Paper, Button, 
+  CircularProgress, LinearProgress, Alert
 } from '@mui/material';
 import {
   Videocam, CheckCircle, ArrowForward,
   MicOff, Mic
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
-import Webcam from 'react-webcam';
 
 const VideoVerificationStep = () => {
   const { id: loanId } = useParams();
   const navigate = useNavigate();
   
-  // Refs
-  const webcamRef = useRef(null);
+  // ======== Refs ========
   const mediaRecorderRef = useRef(null);
-  const videoRef = useRef(null);
+  const liveVideoRef = useRef(null);
+  const reviewVideoRef = useRef(null);
   const questionVideoRef = useRef(null);
-  const streamRef = useRef(null); // Add this ref to store the media stream
+  const streamRef = useRef(null);
   
-  // States
+  // ======== States ========
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [questions, setQuestions] = useState([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [recordedChunks, setRecordedChunks] = useState([]);
-  const [recordingStatus, setRecordingStatus] = useState('idle'); // idle, countdown, recording, review, processing
+  const [recordingStatus, setRecordingStatus] = useState('idle'); // idle, playing-video, countdown, recording, review, processing
   const [countdown, setCountdown] = useState(3);
   const [recordingTime, setRecordingTime] = useState(0);
   const [maxRecordingTime] = useState(30); // 30 seconds max
   const [recordingTimer, setRecordingTimer] = useState(null);
   const [verificationProgress, setVerificationProgress] = useState(0);
   const [overallStatus, setOverallStatus] = useState('pending'); // pending, in-progress, completed
+  const [recordingBlob, setRecordingBlob] = useState(null);
+  const [videoPreviewUrl, setVideoPreviewUrl] = useState(null);
   
-  // Helper function to clean up camera resources
-  const cleanupCameraResources = () => {
-    // Clean up any existing streams
-    if (webcamRef.current && webcamRef.current.video && webcamRef.current.video.srcObject) {
-      webcamRef.current.video.srcObject.getTracks().forEach(track => track.stop());
+  // Get current question - add a safe check to prevent undefined access
+  const currentQuestion = questions.length > 0 ? questions[currentQuestionIndex] || {} : {};
+  
+  // ======== Utility Functions ========
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const secs = (seconds % 60).toString().padStart(2, '0');
+    return `${mins}:${secs}`;
+  };
+  
+  // Enhanced clean up function that resets all recording state
+  const cleanupMediaResources = () => {
+    console.log("Cleaning up media resources");
+    
+    // Stop recording if active
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      try {
+        mediaRecorderRef.current.stop();
+        console.log("Stopped active media recorder");
+      } catch (err) {
+        console.error('Error stopping recorder:', err);
+      }
+      mediaRecorderRef.current = null;
+    }
+    
+    // Clear timer if running
+    if (recordingTimer) {
+      clearInterval(recordingTimer);
+      setRecordingTimer(null);
+    }
+    
+    // Stop all tracks in the stream
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => {
+        track.stop();
+      });
+      streamRef.current = null;
+    }
+    
+    // Clear video elements
+    if (liveVideoRef.current) {
+      liveVideoRef.current.srcObject = null;
+    }
+    
+    // No need to manage video preview URLs anymore
+    if (videoPreviewUrl) {
+      URL.revokeObjectURL(videoPreviewUrl);
+      setVideoPreviewUrl(null);
     }
   };
   
-  // Initialize with questions from local videos folder
+  // ======== Fetch Questions ========
   useEffect(() => {
-    // Mock questions with local video paths
+    console.log("Initializing questions...");
+    
     const mockQuestions = [
       {
         questionId: 'q1',
@@ -62,66 +106,52 @@ const VideoVerificationStep = () => {
       },
       {
         questionId: 'q3',
-        questionText: 'Can you show your Aadhaar card to the camera?',
+        questionText: 'Please show your ID card to the camera',
         videoUrl: `${process.env.REACT_APP_BASE_URL || ''}/videos/3.mp4`,
         isAnswered: false
       }
     ];
     
+    // Set everything in order to ensure proper initialization
     setQuestions(mockQuestions);
+    setCurrentQuestionIndex(0);
+    setRecordingStatus('idle');
+    setVerificationProgress(0);
     setOverallStatus('in-progress');
     setLoading(false);
-  }, [loanId]);
+    
+    console.log("Questions initialized");
+  }, []);
   
   // Clean up on unmount
   useEffect(() => {
     return () => {
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-        mediaRecorderRef.current.stop();
-      }
-      
-      if (recordingTimer) {
-        clearInterval(recordingTimer);
-      }
-      
-      // Clean up the stream
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-      }
-      
-      cleanupCameraResources();
+      cleanupMediaResources();
     };
-  }, [recordingTimer]);
+  }, []);
   
-  // Get current question
-  const currentQuestion = questions[currentQuestionIndex] || {};
+  // Add debugging to track question transitions - add check to prevent unnecessary logs
+  useEffect(() => {
+    if (questions.length > 0 && currentQuestion) {
+      console.log(`Current question index: ${currentQuestionIndex}, Question: ${currentQuestion.questionText}`);
+    }
+  }, [currentQuestionIndex, currentQuestion, questions]);
   
-  // Format time helper (MM:SS)
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
-    const secs = (seconds % 60).toString().padStart(2, '0');
-    return `${mins}:${secs}`;
+  // ======== Video Question Functions ========
+  // Modified function to play the question video with proper source tracking - add safety check
+  const playQuestionVideo = () => {
+    setRecordingStatus('playing-video');
+    console.log("Setting up to play video:", currentQuestion.videoUrl);
+    
+    // Reset any previous video element state
+    if (questionVideoRef.current) {
+      questionVideoRef.current.src = currentQuestion.videoUrl;
+    }
   };
   
-  // Step 1: Play question video
-const playQuestionVideo = () => {
-  // First change state to render the video element
-  setRecordingStatus('playing-video');
-  
-  // Use setTimeout to ensure the video element is rendered
-  setTimeout(() => {
-    if (questionVideoRef.current) {
-      questionVideoRef.current.play().catch(err => {
-        console.error('Error playing video:', err);
-        // Fallback if local video can't play
-        handleVideoError(questionVideoRef.current);
-      });
-    }
-  }, 100);
-};
-  // Handle video error
   const handleVideoError = (videoElement) => {
     console.log("Video error, using fallback");
+    // Force a fallback to a known working video
     videoElement.src = "https://assets.mixkit.co/videos/preview/mixkit-woman-talking-through-a-video-call-598-large.mp4";
     videoElement.play().catch(e => {
       console.error("Fallback video also failed:", e);
@@ -130,13 +160,12 @@ const playQuestionVideo = () => {
     });
   };
   
-  // Handle video ended event
   const handleQuestionVideoEnded = () => {
     setRecordingStatus('countdown');
     startRecordingCountdown();
   };
   
-  // Start countdown before recording
+  // ======== Recording Functions ========
   const startRecordingCountdown = () => {
     setCountdown(3);
     
@@ -152,49 +181,41 @@ const playQuestionVideo = () => {
     }, 1000);
   };
   
-  // Step 2: Start recording
-const startRecording = () => {
-  setRecordingStatus('recording');
-  setRecordingTime(0);
-  setRecordedChunks([]);
-  setError('');
-  
-  // Add delay to ensure webcam is initialized
-  setTimeout(() => {
-    if (!webcamRef.current) {
-      setError('Camera not initialized. Please refresh and try again.');
-      setRecordingStatus('idle');
-      return;
-    }
+  const startRecording = async () => {
+    setRecordingStatus('recording');
+    setRecordingTime(0);
+    setRecordedChunks([]);
+    setRecordingBlob(null); // Ensure we clear any previous blob
+    setError('');
     
-    navigator.mediaDevices.getUserMedia({
-      audio: true,
-      video: {
-        width: 1280,
-        height: 720,
-        facingMode: "user"
-      }
-    })
-    .then(mediaStream => {
-      console.log("Camera access granted, setting up recording");
-      streamRef.current = mediaStream; // Use the ref instead of an undeclared variable
+    try {
+      // Get user media with optimized video settings to prevent slow motion recording
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: {
+          width: { ideal: 640, max: 854 },  // Lower resolution for better performance
+          height: { ideal: 480, max: 480 }, // Standard definition is more reliable
+          frameRate: { ideal: 30, max: 30 }, // Explicitly set frame rate
+          facingMode: "user"
+        }
+      });
       
-      // Ensure webcam ref is set properly
-      if (webcamRef.current) {
-        webcamRef.current.video.srcObject = mediaStream;
-        console.log("Webcam video source set");
-      } else {
-        console.error("Webcam ref not available");
-        throw new Error("Webcam reference not available");
+      // Store the stream and set it to the video element
+      streamRef.current = stream;
+      
+      if (liveVideoRef.current) {
+        liveVideoRef.current.srcObject = stream;
+        liveVideoRef.current.muted = true; // Mute to avoid feedback
+        liveVideoRef.current.play().catch(e => console.error("Error playing local video:", e));
       }
       
-      // Determine supported MIME types
-      let mimeType = null;
+      // Find the best supported MIME type
+      let mimeType = '';
       const supportedTypes = [
-        'video/webm;codecs=vp9,opus',
         'video/webm;codecs=vp8,opus',
         'video/webm',
-        'video/mp4'
+        'video/mp4',
+        ''  // Empty string as fallback
       ];
       
       for (const type of supportedTypes) {
@@ -205,183 +226,169 @@ const startRecording = () => {
         }
       }
       
-      const options = mimeType ? { mimeType } : {};
+      // Create media recorder with performance-optimized settings
+      const options = {
+        mimeType: mimeType,
+        videoBitsPerSecond: 600000,  // Moderate bitrate (600kbps)
+        audioBitsPerSecond: 96000,   // Lower audio bitrate (96kbps)
+        audioBitrateMode: 'constant',
+        videoFrameRate: 30  // Ensure consistent frame rate
+      };
       
-      try {
-        // Create media recorder with explicit error handling
-        const recorder = new MediaRecorder(mediaStream, options);
-        mediaRecorderRef.current = recorder;
-        
-        // Set up event handlers for the recorder
-        recorder.ondataavailable = (event) => {
-          console.log(`Data available: ${event.data.size} bytes`);
-          if (event.data && event.data.size > 0) {
-            setRecordedChunks(prev => [...prev, event.data]);
-          }
-        };
-        
-        recorder.onstart = () => {
-          console.log("MediaRecorder started");
-        };
-        
-        recorder.onstop = () => {
-          console.log("MediaRecorder stopped");
-          setRecordingStatus('review');
-        };
-        
-        recorder.onerror = (event) => {
-          console.error("MediaRecorder error:", event.error);
-          setError(`Recording error: ${event.error.message || 'Unknown error'}`);
-        };
-        
-        // Start the recorder with a 500ms interval (more frequent chunks)
-        recorder.start(500);
-        console.log("MediaRecorder started recording");
-        
-        // Set up timer
-        const timer = setInterval(() => {
-          setRecordingTime(prev => {
-            const newTime = prev + 1;
-            console.log(`Recording time: ${newTime}s`);
+      const recorder = new MediaRecorder(stream, options);
+      mediaRecorderRef.current = recorder;
+      
+      // Add speed check and logging for debugging
+      console.log("Media recorder created with options:", options);
+      console.log("Video tracks:", stream.getVideoTracks().map(track => ({
+        settings: track.getSettings(),
+        constraints: track.getConstraints()
+      })));
+      
+      // Set up recorder events
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          setRecordedChunks(prev => [...prev, event.data]);
+        }
+      };
+      
+      recorder.onstop = () => {
+        const chunks = recordedChunks;
+        if (chunks.length > 0) {
+          try {
+            // Create a blob with proper MIME type based on collected chunks
+            const mimeType = recorder.mimeType || 'video/webm';
+            const blob = new Blob(chunks, { type: mimeType });
             
-            if (newTime >= maxRecordingTime) {
-              clearInterval(timer);
-              stopRecording();
-              return maxRecordingTime;
-            }
-            return newTime;
-          });
-        }, 1000);
-        
-        setRecordingTimer(timer);
-      } catch (err) {
-        console.error("Error creating MediaRecorder:", err);
-        setError(`MediaRecorder error: ${err.message || 'Unknown error'}`);
-        setRecordingStatus('idle');
-        
-        // Clean up the stream
-        if (streamRef.current) {
-          streamRef.current.getTracks().forEach(track => track.stop());
+            console.log(`Recording completed: ${(blob.size / 1024).toFixed(2)} KB, type: ${blob.type}`);
+            
+            // Store the blob
+            setRecordingBlob(blob);
+            
+            // Skip preview creation
+            // createVideoPreview(blob);
+            
+            // Update state to show review screen
+            setRecordingStatus('review');
+          } catch (err) {
+            console.error("Error processing recording:", err);
+            setError("Error processing recording, but you can still try to submit.");
+            setRecordingStatus('review');
+          }
+        } else {
+          setError("No recording data captured. Please try again.");
+          setRecordingStatus('idle');
         }
-      }
-    })
-    .catch(err => {
-      console.error("Error accessing media devices:", err);
-      setError(`Camera access error: ${err.message || 'Unknown error'}`);
+      };
+      
+      // Start the recorder with smaller chunks for more efficient processing
+      recorder.start(500); // 500ms chunks instead of 1000ms
+      
+      // Set up timer for recording duration
+      const timer = setInterval(() => {
+        setRecordingTime(prev => {
+          const newTime = prev + 1;
+          if (newTime >= maxRecordingTime) {
+            stopRecording();
+            clearInterval(timer);
+            return maxRecordingTime;
+          }
+          return newTime;
+        });
+      }, 1000);
+      
+      setRecordingTimer(timer);
+      
+    } catch (err) {
+      console.error("Error starting recording:", err);
+      setError(`Failed to access camera: ${err.message || 'Unknown error'}`);
       setRecordingStatus('idle');
-      
-      // Clean up the stream
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-      }
-    });
-  }, 500); // Small delay to ensure webcam component is ready
-};
-  
-// Step 3: Stop recording
-const stopRecording = () => {
-  console.log("Stopping recording...");
-  
-  // Stop the timer
-  if (recordingTimer) {
-    clearInterval(recordingTimer);
-    console.log("Recording timer cleared");
-  }
-  
-  if (mediaRecorderRef.current) {
-    // Check if it's actually recording
-    if (mediaRecorderRef.current.state === 'recording') {
-      console.log("MediaRecorder is active, stopping it...");
-      
-      // Request a final data chunk
-      mediaRecorderRef.current.requestData();
-      
-      // Small delay to ensure the final data is captured
-      setTimeout(() => {
-        try {
-          mediaRecorderRef.current.stop();
-          console.log("MediaRecorder stopped successfully");
-        } catch (err) {
-          console.error("Error stopping MediaRecorder:", err);
-        }
-      }, 500);
-    } else {
-      console.log(`MediaRecorder not recording (state: ${mediaRecorderRef.current.state})`);
-      setRecordingStatus('review');
     }
-  } else {
-    console.log("No MediaRecorder instance found");
-    setRecordingStatus('review');
-  }
-};
-  
-  // Retry recording
-  const retryRecording = () => {
-    // Stop webcam tracks
-    if (webcamRef.current && webcamRef.current.video.srcObject) {
-      webcamRef.current.video.srcObject.getTracks().forEach(track => track.stop());
-    }
-    
-    setRecordedChunks([]);
-    setRecordingStatus('idle');
-    setRecordingTime(0);
   };
   
-  // Step 4: Submit recording and move to next question
+  const stopRecording = () => {
+    // Clear the recording timer
+    if (recordingTimer) {
+      clearInterval(recordingTimer);
+      setRecordingTimer(null);
+    }
+    
+    // Stop the media recorder if it's recording
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    } else {
+      // If recorder isn't running for some reason, still move to review
+      setRecordingStatus('review');
+    }
+  };
+
+  const retryRecording = () => {
+    cleanupMediaResources();
+    setRecordedChunks([]);
+    setRecordingBlob(null);
+    setRecordingStatus('idle');
+    setRecordingTime(0);
+    setError('');
+  };
+  
+  // Modify the submitRecording function to ensure proper state reset between questions
   const submitRecording = async () => {
-    if (recordedChunks.length === 0) {
-      setError("No recording captured. Please try again.");
+    if (!recordingBlob) {
+      setError("No recording available. Please try again.");
       return;
     }
     
     setRecordingStatus('processing');
     
     try {
-      // Create blob from chunks
-      const blob = new Blob(recordedChunks, {
-        type: 'video/webm'
-      });
+      // Simulate API call to upload video
+      console.log(`Video size: ${(recordingBlob.size / (1024 * 1024)).toFixed(2)} MB`);
+      await new Promise(resolve => setTimeout(resolve, 1500));
       
-      console.log(`Video recorded: ${(blob.size / (1024 * 1024)).toFixed(2)} MB`);
-      
-      // In a real app, upload the blob here
-      // For demo, simulate processing
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Mark current question as answered
+      setQuestions(prev => prev.map((q, idx) => 
+        idx === currentQuestionIndex ? { ...q, isAnswered: true } : q
+      ));
       
       // Update progress
       const newProgress = ((currentQuestionIndex + 1) / questions.length) * 100;
       setVerificationProgress(newProgress);
       
-      // Update questions array to mark this one as answered
-      setQuestions(prev => prev.map((q, idx) => 
-        idx === currentQuestionIndex ? { ...q, isAnswered: true } : q
-      ));
+      // Clean up media resources before moving to next question
+      cleanupMediaResources();
       
-      // Check if more questions
+      // Reset recording state
+      setRecordedChunks([]);
+      setRecordingBlob(null);
+      
       if (currentQuestionIndex < questions.length - 1) {
-        // Move to next question
-        setCurrentQuestionIndex(prev => prev + 1);
-        setRecordingStatus('idle');
+        // Store the next index to prevent race conditions
+        const nextIndex = currentQuestionIndex + 1;
         
-        // Stop webcam tracks
-        if (webcamRef.current && webcamRef.current.video.srcObject) {
-          webcamRef.current.video.srcObject.getTracks().forEach(track => track.stop());
-        }
+        // Set the next question index first
+        setCurrentQuestionIndex(nextIndex);
+        
+        // Then update the recording status
+        setTimeout(() => {
+          setRecordingStatus('idle');
+        }, 100);
       } else {
-        // Completed all questions
+        // All questions completed
         setOverallStatus('completed');
       }
     } catch (err) {
-      console.error("Error processing video:", err);
+      console.error("Error submitting recording:", err);
       setError("Failed to process your recording. Please try again.");
+      setRecordingStatus('review');
     }
   };
   
-  // Navigate to next step
+  // Handle completion
   const handleComplete = () => {
     navigate(`/loan/${loanId}`);
   };
   
+  // ======== Rendering ========
   // Loading state
   if (loading) {
     return (
@@ -392,18 +399,6 @@ const stopRecording = () => {
             Initializing video verification...
           </Typography>
         </Box>
-      </Container>
-    );
-  }
-  
-  // Error state
-  if (error && recordingStatus !== 'idle' && recordingStatus !== 'review') {
-    return (
-      <Container maxWidth="md" sx={{ mt: 4 }}>
-        <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>
-        <Button variant="contained" onClick={() => navigate(`/loan/${loanId}`)}>
-          Return to Loan Details
-        </Button>
       </Container>
     );
   }
@@ -435,24 +430,13 @@ const stopRecording = () => {
   // Main UI
   return (
     <Container maxWidth="md" sx={{ mt: 4 }}>
-      {/* Modified webcam initialization - always present regardless of recording status */}
-      <div style={{ display: 'none' }}>
-        <Webcam
-          ref={webcamRef}
-          audio={false}
-          videoConstraints={{
-            facingMode: "user"
-          }}
-        />
-      </div>
-      
-      {/* Rest of your UI */}
+      {/* Header with progress */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="h4" component="h1" gutterBottom>
           Video Verification
         </Typography>
         <Typography variant="body1" paragraph>
-          Please answer the following questions. Your responses will be recorded and verified against your documents.
+          Please answer the following questions. Your responses will be recorded for verification.
         </Typography>
         
         <Box sx={{ mb: 3 }}>
@@ -472,10 +456,11 @@ const stopRecording = () => {
         </Box>
       </Paper>
       
+      {/* Main content area */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Box>
-          {/* Step 1: Question intro */}
-          {recordingStatus === 'idle' && (
+          {/* Question intro */}
+          {recordingStatus === 'idle' && currentQuestion?.questionText && (
             <>
               <Typography variant="h6" gutterBottom>
                 Question: {currentQuestion.questionText}
@@ -487,13 +472,14 @@ const stopRecording = () => {
                 onClick={playQuestionVideo}
                 sx={{ mt: 2 }}
                 fullWidth
+                disabled={!currentQuestion?.videoUrl}
               >
                 Play Question Video
               </Button>
             </>
           )}
           
-          {/* Step 2: Playing question video */}
+          {/* Playing question video */}
           {recordingStatus === 'playing-video' && (
             <Box sx={{ width: '100%', aspectRatio: '16/9', mb: 2 }}>
               <video
@@ -503,8 +489,20 @@ const stopRecording = () => {
                 controls
                 preload="auto"
                 autoPlay
+                onCanPlay={(e) => {
+                  console.log("Video can play now, attempting playback");
+                  if (recordingStatus === 'playing-video') {
+                    e.target.play().catch(err => {
+                      console.error('Error playing video:', err);
+                      handleVideoError(e.target);
+                    });
+                  }
+                }}
                 onEnded={handleQuestionVideoEnded}
-                onError={(e) => handleVideoError(e.target)}
+                onError={(e) => {
+                  console.error("Video error occurred:", e.target.error);
+                  handleVideoError(e.target);
+                }}
               />
             </Box>
           )}
@@ -527,119 +525,121 @@ const stopRecording = () => {
             </Box>
           )}
           
-          {/* Step 3: Recording user response */}
-              {recordingStatus === 'recording' && (
-                <>
-                  <Box sx={{ position: 'relative', width: '100%', aspectRatio: '16/9', mb: 2 }}>
-                    {/* Don't render a new Webcam - show the existing one */}
-                    <video
-                      ref={element => {
-                        if (element && webcamRef.current && webcamRef.current.video) {
-                          element.srcObject = webcamRef.current.video.srcObject;
-                          element.play();
-                        }
-                      }}
-                      style={{ width: '100%', height: '100%' }}
-                      muted
-                    />
-                    <Box 
-                      sx={{ 
-                        position: 'absolute', 
-                        bottom: 10, 
-                        left: 10, 
-                        backgroundColor: 'rgba(255,0,0,0.7)', 
-                        color: 'white', 
-                        px: 1, 
-                        py: 0.5, 
-                        borderRadius: 1, 
-                        display: 'flex', 
-                        alignItems: 'center' 
-                      }}
-                    >
-                      <Mic sx={{ mr: 1, fontSize: 20 }} />
-                      <Typography variant="body2">
-                        Recording {formatTime(recordingTime)} / {formatTime(maxRecordingTime)}
-                      </Typography>
-                    </Box>
-                  </Box>
-                  
-                  <Button
-                    variant="contained"
-                    color="error"
-                    startIcon={<MicOff />}
-                    onClick={stopRecording}
-                    fullWidth
-                  >
-                    Stop Recording
-                  </Button>
-                </>
-              )}
+          {/* Recording user response */}
+          {recordingStatus === 'recording' && (
+            <>
+              <Box sx={{ position: 'relative', width: '100%', aspectRatio: '16/9', mb: 2 }}>
+                <video
+                  ref={liveVideoRef}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  muted
+                  autoPlay
+                  playsInline
+                />
+                <Box 
+                  sx={{ 
+                    position: 'absolute', 
+                    bottom: 10, 
+                    left: 10, 
+                    backgroundColor: 'rgba(255,0,0,0.7)', 
+                    color: 'white', 
+                    px: 1, 
+                    py: 0.5, 
+                    borderRadius: 1, 
+                    display: 'flex', 
+                    alignItems: 'center' 
+                  }}
+                >
+                  <Mic sx={{ mr: 1, fontSize: 20 }} />
+                  <Typography variant="body2">
+                    Recording {formatTime(recordingTime)} / {formatTime(maxRecordingTime)}
+                  </Typography>
+                </Box>
+              </Box>
               
-              {/* Step 4: Review recording */}
-              {recordingStatus === 'review' && (
-      <>
-        <Typography variant="h6" gutterBottom>
-          Review Your Response
-        </Typography>
-
-        {recordedChunks.length > 0 ? (
-          <Box sx={{ width: '100%', aspectRatio: '16/9', mb: 2 }}>
-            <video
-              ref={videoRef}
-              src={URL.createObjectURL(new Blob(recordedChunks, { type: 'video/webm' }))}
-              style={{ width: '100%', height: '100%' }}
-              controls
-              autoPlay
-              onError={(e) => {
-                console.error("Error playing recorded video:", e);
-                setError("Error playing back your recording. The format might not be supported.");
-              }}
-            />
-          </Box>
-        ) : (
-          <Box
-            sx={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              height: '200px',
-              backgroundColor: '#f5f5f5',
-              mb: 2,
-            }}
-          >
-            <Typography variant="body1" color="text.secondary">
-              No recording captured. Please try again.
-            </Typography>
-          </Box>
-        )}
-
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
-        )}
-
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
-          <Button variant="outlined" onClick={retryRecording}>
-            Record Again
-          </Button>
-
-          <Button
-            variant="contained"
-            color="success"
-            startIcon={<CheckCircle />}
-            onClick={submitRecording}
-            disabled={recordedChunks.length === 0}
-          >
-            Submit Response
-          </Button>
-        </Box>
-      </>
-    )}
-
+              <Button
+                variant="contained"
+                color="error"
+                startIcon={<MicOff />}
+                onClick={stopRecording}
+                fullWidth
+              >
+                Stop Recording
+              </Button>
+            </>
+          )}
           
-          {/* Step 5: Processing */}
+          {/* Review recording */}
+          {recordingStatus === 'review' && (
+            <>
+              <Typography variant="h6" gutterBottom>
+                Your Response
+              </Typography>
+
+              {recordingBlob ? (
+                <Box sx={{ 
+                  width: '100%', 
+                  backgroundColor: '#f0f0f0', 
+                  borderRadius: 2,
+                  p: 3, 
+                  mb: 2, 
+                  textAlign: 'center',
+                  border: '1px solid #e0e0e0'
+                }}>
+                  <CheckCircle color="success" sx={{ fontSize: 40, mb: 1 }} />
+                  <Typography variant="h6" gutterBottom>
+                    Recording Completed
+                  </Typography>
+                  <Typography variant="body1" paragraph>
+                    Your response has been recorded successfully.
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Recording size: {recordingBlob ? `${(recordingBlob.size / 1024).toFixed(2)} KB` : 'Unknown'}
+                  </Typography>
+                </Box>
+              ) : (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    height: '200px',
+                    backgroundColor: '#f5f5f5',
+                    mb: 2,
+                  }}
+                >
+                  <Typography variant="body1" color="text.secondary">
+                    No recording captured. Please try again.
+                  </Typography>
+                </Box>
+              )}
+
+              {error && (
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                  {error}
+                </Alert>
+              )}
+
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
+                <Button variant="outlined" onClick={retryRecording}>
+                  Record Again
+                </Button>
+
+                <Button
+                  variant="contained"
+                  color="success"
+                  startIcon={<CheckCircle />}
+                  onClick={submitRecording}
+                  disabled={!recordingBlob}
+                >
+                  Submit Response
+                </Button>
+              </Box>
+            </>
+          )}
+          
+          {/* Processing */}
           {recordingStatus === 'processing' && (
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', p: 4 }}>
               <CircularProgress />
@@ -649,18 +649,6 @@ const stopRecording = () => {
               <Typography variant="body2" color="text.secondary">
                 We're analyzing your answer
               </Typography>
-              {error && (
-                <Alert severity="error" sx={{ mt: 2, width: '100%' }}>
-                  {error}
-                  <Button 
-                    size="small" 
-                    sx={{ ml: 2 }} 
-                    onClick={retryRecording}
-                  >
-                    Try Again
-                  </Button>
-                </Alert>
-              )}
             </Box>
           )}
         </Box>

@@ -56,6 +56,7 @@ function App() {
               <Route path="/loan/:id" element={<LoanDetails />} />
               <Route path="/loan/:id/video-verification" element={<VideoVerificationStep />} />
               <Route path="/loan/:id/documents" element={<DocumentUpload />} />
+              
             </Route>
             
             {/* Protected routes for admin users */}
