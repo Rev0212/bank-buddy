@@ -15,7 +15,7 @@ import Dashboard from './pages/dashboard/Dashboard';
 import Profile from './pages/profile/Profile';
 import LoanApplication from './pages/loan/LoanApplication';
 import LoanDetails from './pages/loan/LoanDetails';
-import VideoVerification from './pages/verification/VideoVerification';
+import VideoVerificationStep from './pages/verification/VideoVerificationStep';
 import DocumentUpload from './pages/verification/DocumentUpload';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import NotFound from './pages/NotFound';
@@ -54,7 +54,7 @@ function App() {
               <Route path="/profile" element={<Profile />} />
               <Route path="/loan/apply" element={<LoanApplication />} />
               <Route path="/loan/:id" element={<LoanDetails />} />
-              <Route path="/loan/:id/video-verification" element={<VideoVerification />} />
+              <Route path="/loan/:id/video-verification" element={<VideoVerificationStep />} />
               <Route path="/loan/:id/documents" element={<DocumentUpload />} />
             </Route>
             

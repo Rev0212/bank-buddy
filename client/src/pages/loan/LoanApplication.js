@@ -13,7 +13,7 @@ import axios from 'axios';
 // Import your components
 import LoanBasicDetails from '../../components/loan/LoanBasicDetails';
 import DocumentUploadStep from '../../components/loan/DocumentUploadStep';
-import VideoVerificationStep from '../../components/loan/VideoVerificationStep';
+import VideoVerificationStep from '../../pages/verification/VideoVerificationStep';
 import LoanReviewStep from '../../components/loan/LoanReviewStep';
 
 const LoanApplication = () => {
