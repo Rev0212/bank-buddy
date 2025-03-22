@@ -26,7 +26,10 @@ import {
   AttachMoney,
   AccountBalance,
   ReceiptLong,
-  Feed
+  Feed,
+  AccessTime,
+  ThumbUp,
+  ThumbDown
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import LoanStatusBadge from '../../components/loan/LoanStatusBadge';
@@ -73,6 +76,47 @@ const LoanDetails = () => {
       setLoading(false);
     }, 1000);
   }, [loanId]);
+  
+  // Add this useEffect near your other useEffects to handle the automatic status change
+  useEffect(() => {
+    // Only run this if we have loan data and it's in pending status or
+    // we should force it to pending for demo purposes
+    if (loan) {
+      // Force loan to pending status initially
+      setLoan(prevLoan => ({
+        ...prevLoan,
+        status: 'pending',
+        timeline: [
+          ...prevLoan.timeline.filter(item => !item.status.includes('Approved')),
+          { 
+            date: new Date().toISOString(), 
+            status: 'Processing', 
+            message: 'Application is under review by our team' 
+          }
+        ]
+      }));
+      
+      // Set a timer to automatically approve after 5 seconds
+      const approvalTimer = setTimeout(() => {
+        console.log('Auto-approving loan after 5 seconds...');
+        setLoan(prevLoan => ({
+          ...prevLoan,
+          status: 'verified',
+          timeline: [
+            ...prevLoan.timeline.filter(item => !item.status.includes('Rejected')),
+            { 
+              date: new Date().toISOString(), 
+              status: 'Approved', 
+              message: 'Loan has been approved and is ready for disbursal' 
+            }
+          ]
+        }));
+      }, 5000); // 5 seconds instead of 10
+      
+      // Clean up the timer if component unmounts
+      return () => clearTimeout(approvalTimer);
+    }
+  }, [loan?.loanId]); // Only run this when loanId changes or first loads
   
   // Format currency
   const formatCurrency = (amount) => {
@@ -279,6 +323,91 @@ const LoanDetails = () => {
               );
             })()}
           </Paper>
+
+          {/* Replace the Admin Controls Card with status-specific info cards */}
+          {loan.status === 'pending' && (
+            <Paper sx={{ p: 3, mb: 3, bgcolor: '#fff8e1', border: '1px solid #ffe082' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <AccessTime color="warning" sx={{ mr: 1 }} />
+                <Typography variant="h6">
+                  Application Under Review
+                </Typography>
+              </Box>
+              
+              <Typography variant="body2" paragraph>
+                Your loan application is currently being reviewed by our team. This typically takes a few minutes.
+              </Typography>
+              
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', p: 2 }}>
+                <CircularProgress size={20} sx={{ mr: 1 }} color="warning" />
+                <Typography variant="body2" color="text.secondary">
+                  Automatic approval in progress...
+                </Typography>
+              </Box>
+            </Paper>
+          )}
+
+          {loan.status === 'verified' && (
+            <Paper sx={{ p: 3, mb: 3, bgcolor: '#e8f5e9', border: '1px solid #a5d6a7' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <ThumbUp color="success" sx={{ mr: 1 }} />
+                <Typography variant="h6">
+                  Loan Approved!
+                </Typography>
+              </Box>
+              
+              <Typography variant="body2" paragraph>
+                Congratulations! Your loan application has been approved.
+              </Typography>
+              
+              <Box sx={{ p: 2, bgcolor: 'white', borderRadius: 1 }}>
+                <Typography variant="subtitle2" gutterBottom>
+                  Next steps:
+                </Typography>
+                <Typography variant="body2" component="div">
+                  <ul style={{ margin: 0, paddingLeft: '1.5rem' }}>
+                    <li>Funds will be disbursed to your registered account within 24 hours</li>
+                    <li>You'll receive a confirmation SMS and email when the transfer is complete</li>
+                    <li>Your first EMI payment will be due 30 days after disbursal</li>
+                  </ul>
+                </Typography>
+              </Box>
+            </Paper>
+          )}
+
+          {loan.status === 'rejected' && (
+            <Paper sx={{ p: 3, mb: 3, bgcolor: '#ffebee', border: '1px solid #ef9a9a' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <ThumbDown color="error" sx={{ mr: 1 }} />
+                <Typography variant="h6">
+                  Application Not Approved
+                </Typography>
+              </Box>
+              
+              <Typography variant="body2" paragraph>
+                We're sorry, but your loan application couldn't be approved at this time.
+              </Typography>
+              
+              <Box sx={{ p: 2, bgcolor: 'white', borderRadius: 1 }}>
+                <Typography variant="subtitle2" gutterBottom>
+                  Reason:
+                </Typography>
+                <Typography variant="body2">
+                  Your application does not meet our current eligibility criteria due to insufficient income proof.
+                </Typography>
+                
+                <Button 
+                  variant="outlined" 
+                  color="primary" 
+                  size="small" 
+                  sx={{ mt: 2 }}
+                  onClick={() => navigate('/contact')}
+                >
+                  Contact Support
+                </Button>
+              </Box>
+            </Paper>
+          )}
         </>
       ) : (
         /* Timeline Tab */

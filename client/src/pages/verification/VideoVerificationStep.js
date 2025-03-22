@@ -94,20 +94,56 @@ const VideoVerificationStep = () => {
     const mockQuestions = [
       {
         questionId: 'q1',
-        questionText: 'Please state your full name and date of birth',
+        questionText: 'Introduction:',
         videoUrl: `${process.env.REACT_APP_BASE_URL || ''}/videos/1.mp4`,
         isAnswered: false
       },
       {
         questionId: 'q2',
-        questionText: 'What is your current home address?',
+        questionText: 'Name?',
         videoUrl: `${process.env.REACT_APP_BASE_URL || ''}/videos/2.mp4`,
         isAnswered: false
       },
       {
         questionId: 'q3',
-        questionText: 'Please show your ID card to the camera',
+        questionText: 'Date of Birth?',
         videoUrl: `${process.env.REACT_APP_BASE_URL || ''}/videos/3.mp4`,
+        isAnswered: false
+      },
+      {
+        questionId: 'q4',
+        questionText: 'Aadhar Card Number?',
+        videoUrl: `${process.env.REACT_APP_BASE_URL || ''}/videos/4.mp4`,
+        isAnswered: false
+      },
+      {
+        questionId: 'q5',
+        questionText: 'Employment Details?',
+        videoUrl: `${process.env.REACT_APP_BASE_URL || ''}/videos/5.mp4`,
+        isAnswered: false
+      },
+      {
+        questionId: 'q6',
+        questionText: 'Monthly Income?',
+        videoUrl: `${process.env.REACT_APP_BASE_URL || ''}/videos/6.mp4`,
+        isAnswered: false
+      },
+      {
+        questionId: 'q7',
+        questionText: 'Name of the Company?',
+        videoUrl: `${process.env.REACT_APP_BASE_URL || ''}/videos/7.mp4`,
+        isAnswered: false
+      },
+      {
+        questionId: 'q8',
+        questionText: 'Work Experience?',
+        videoUrl: `${process.env.REACT_APP_BASE_URL || ''}/videos/8.mp4`,
+        isAnswered: false
+      },
+      {
+        questionId: 'q9',
+        questionText: 'Loan amount required?',
+        videoUrl: `${process.env.REACT_APP_BASE_URL || ''}/videos/10.mp4`,
         isAnswered: false
       }
     ];
